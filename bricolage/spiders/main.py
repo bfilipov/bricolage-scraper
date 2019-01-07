@@ -12,10 +12,10 @@ class MainSpider(scrapy.Spider):
     def parse(self, response):
         if len(response.xpath("//div[@class='sort-refine-bar']")) > 0:  # list page identifier
             for item in response.xpath("//div[@class='product']"):
-                title = ''.join(
-                    e for e in item.xpath(".//div[@class='title']/a/text()").
-                        extract_first() if (e.isalnum() or e == ' ')
-                )
+                title = re.sub(
+                        r'\r|\n|\t', '',
+                        str(response.xpath(".//div[@class='title']/a/text()").extract_first())
+                    )
                 price = item.xpath(".//div[@class='price']/text()").extract_first()
 
                 price = '{0:.2f}'.format(
@@ -36,7 +36,7 @@ class MainSpider(scrapy.Spider):
 
         next_page = response.xpath("//li[@class='pagination-next']/a/@href").extract_first()
         if next_page is not None:
-            next_page=response.urljoin(next_page)
+            next_page = response.urljoin(next_page)
             yield scrapy.Request(
                 next_page,
                 callback=self.parse,
@@ -52,7 +52,7 @@ class MainSpider(scrapy.Spider):
         bricolage_id = response.xpath("//div[@class='col-md-12 bricolage-code']/text()").\
             extract_first().split(":")[1].strip()
         sap_ean = re.sub(
-            r'[^\d]', '', str(response.xpath("//div[@class='product-classifications']/parent::div/div/span").extract_first())
+            r'[^\d]', '', str(response.xpath("//strong[text()='SAP EAN']/parent::span/text()[2]").extract_first())
         )
         product_specs = re.sub(
             r'\r|\n|\t|class="attrib"|\xa0', '',
@@ -62,15 +62,18 @@ class MainSpider(scrapy.Spider):
             .extract_first()
 
         price = '{0:.2f}'.format(
-            Decimal(re.sub(r'\r|\n|\t|[^\d,]', '', response.xpath("//div[@class='col-md-12 price']/p/text()")
-                           .extract_first()).replace(',', '.'))
+            Decimal(re.sub(r'\r|\n|\t|[^\d,]', '', str(response.xpath("//div[@class='col-md-12 price']/p/text()")
+                                                       .extract_first())
+                           ).replace(',', '.'))
         )
+        image = response.xpath("///div[@class='owl-carousel owl-carousel-thumbs']/div/img/@src").extract_first()
 
         # save the needed ones to dict
         product['product_specs'] = product_specs
         product['bricolage_id']  = bricolage_id
         product['title_product'] = title
         product['price_product'] = price
+        product['image_product'] = image
         product['sap_ean']       = sap_ean
 
         request = scrapy.Request(
